@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+**/dist/
+**/build/
+frontend/dist/
+backend/dist/
+
+# Environment & secrets — never commit real values
+.env
+.env.*
+!.env.example
+
+# Local telemetry tooling (artisyn hooks) — personal, not a project deliverable
+.claude/telemetry_tool/
+.claude/HOOK_INSTALL_INSTRUCTIONS.md
+.claude/settings.json
+# Local telemetry output (recorded session data) — never commit
+.ai_work_dir/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Test artifacts
+coverage/
+**/coverage/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# Prisma
+backend/prisma/*.db
+
+# Internal planning scratch (not part of the deliverable)
+tasks/

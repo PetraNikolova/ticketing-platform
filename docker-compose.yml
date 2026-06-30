@@ -1,0 +1,67 @@
+# Three-tier deployment: PostgreSQL + NestJS API + nginx-served React SPA,
+# plus a maildev mail catcher so the email-verification flow works end-to-end.
+#
+#   docker compose up --build      then open http://localhost:8080
+#   maildev inbox UI               http://localhost:1080
+#
+# Defaults below let a CLEAN CHECKOUT start with no .env file. Override any of
+# them (especially POSTGRES_PASSWORD / JWT_SECRET) by creating a root .env — see
+# .env.example. The JWT default is a clearly-marked dev value, not a real secret.
+#
+# ⚠️ NOT verified on the development machine (Docker Desktop is unavailable in
+# this environment). Authored to spec; validate on a Docker-capable host.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ticketing}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ticketing}
+      POSTGRES_DB: ${POSTGRES_DB:-ticketing}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ticketing} -d ${POSTGRES_DB:-ticketing}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      # Host is the `db` service, not localhost. Credentials come from the same
+      # vars Postgres uses above so they always match.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ticketing}:${POSTGRES_PASSWORD:-ticketing}@db:5432/${POSTGRES_DB:-ticketing}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me}
+      SESSION_TTL: ${SESSION_TTL:-7d}
+      # Container topology — point at the maildev service, not localhost.
+      SMTP_HOST: mail
+      SMTP_PORT: '1025'
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-Ticketing <no-reply@ticketing.local>}
+      # Verification links must point at the published frontend URL.
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      BACKEND_PORT: '3000'
+    depends_on:
+      db:
+        condition: service_healthy
+      mail:
+        condition: service_started
+    expose:
+      - '3000'
+
+  frontend:
+    build: ./frontend
+    ports:
+      - '8080:80'
+    depends_on:
+      - backend
+
+  mail:
+    image: maildev/maildev
+    ports:
+      - '1080:1080' # inbox web UI (SMTP on 1025 is internal to the compose network)
+
+volumes:
+  pgdata:
