@@ -1,0 +1,140 @@
+// Ticketing System — data model.
+// Timestamps are stored as timestamptz (UTC); the API serializes them as ISO-8601.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+// Canonical API values. The UI renders human-readable labels.
+
+enum TicketType {
+  bug
+  feature
+  fix
+}
+
+enum TicketState {
+  new
+  ready_for_implementation
+  in_progress
+  ready_for_acceptance
+  done
+}
+
+// ── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  // Stored already trimmed + lowercased, so this unique index enforces the
+  // case-insensitive uniqueness the spec requires.
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  emailVerified Boolean @default(false) @map("email_verified")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  verificationTokens EmailVerificationToken[]
+  createdTickets     Ticket[]                 @relation("TicketCreatedBy")
+  comments           Comment[]
+
+  @@map("users")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  // Only the hash of the token is stored; the raw token lives in the email link.
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model Team {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  // @updatedAt bumps on any row update; service layer avoids no-op writes.
+  modifiedAt DateTime @updatedAt @map("modified_at") @db.Timestamptz(3)
+
+  epics   Epic[]
+  tickets Ticket[]
+
+  // Case-insensitive uniqueness on name is enforced by a functional unique
+  // index (lower(name)) added in the migration SQL — Prisma cannot express it
+  // in-schema.
+  @@map("teams")
+}
+
+model Epic {
+  id          String   @id @default(uuid()) @db.Uuid
+  teamId      String   @map("team_id") @db.Uuid
+  title       String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  modifiedAt  DateTime @updatedAt @map("modified_at") @db.Timestamptz(3)
+
+  // An epic belongs to exactly one team; that team is immutable after creation
+  // (enforced in the service). Cannot delete while tickets reference it
+  // (Restrict → surfaced as HTTP 409).
+  team    Team     @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  tickets Ticket[]
+
+  @@index([teamId])
+  @@map("epics")
+}
+
+model Ticket {
+  id          String      @id @default(uuid()) @db.Uuid
+  teamId      String      @map("team_id") @db.Uuid
+  epicId      String?     @map("epic_id") @db.Uuid
+  type        TicketType
+  state       TicketState @default(new)
+  title       String
+  body        String
+  createdById String      @map("created_by_id") @db.Uuid
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  // Represents the latest real field/state change. The service skips writes
+  // when nothing changed so this does not advance on no-op saves, and adding a
+  // comment never touches the ticket row.
+  modifiedAt  DateTime    @updatedAt @map("modified_at") @db.Timestamptz(3)
+
+  // Team cannot be deleted while it has tickets (Restrict → HTTP 409).
+  team Team @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  // Epic is optional; cannot be deleted while referenced (Restrict → HTTP 409).
+  // Same-team constraint (epic.teamId == ticket.teamId) enforced in the service.
+  epic Epic? @relation(fields: [epicId], references: [id], onDelete: Restrict)
+  // Author of record; users are not deleted in the mandatory scope.
+  createdBy User @relation("TicketCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  // Deleting a ticket cascades to its comments.
+  comments Comment[]
+
+  @@index([teamId])
+  @@index([epicId])
+  @@index([teamId, modifiedAt])
+  @@map("tickets")
+}
+
+model Comment {
+  id        String   @id @default(uuid()) @db.Uuid
+  ticketId  String   @map("ticket_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([ticketId])
+  @@map("comments")
+}
