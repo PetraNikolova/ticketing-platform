@@ -12,7 +12,10 @@ COPY . .
 RUN npm run build
 
 # ── Runtime stage (nginx serves the static SPA + proxies /api) ────────────────
-FROM nginx:1.27-alpine AS runtime
+# Pinned to the nginx stable branch that carries the nginx2root fixes
+# (CVE-2026-123007 and the four related flaws). 1.27 is an EOL mainline
+# release and will never receive them, so don't float this back.
+FROM nginx:1.30.7-alpine AS runtime
 
 # Replace the default server with our SPA + reverse-proxy config.
 COPY nginx.conf /etc/nginx/conf.d/default.conf
