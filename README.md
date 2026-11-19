@@ -14,7 +14,7 @@ Built to the *Hackathon Ticketing System Requirements v4* specification.
 |------|------------|
 | Presentation | React 19 + Vite + TypeScript SPA |
 | Application / API | NestJS (TypeScript), HTTP API under `/api` |
-| Persistence | PostgreSQL 16+ |
+| Persistence | PostgreSQL 18 |
 
 Authentication uses an **httpOnly cookie session** (signed JWT). In the container
 deployment, an **nginx** frontend container serves the SPA and reverse-proxies
@@ -33,7 +33,7 @@ repo-root/
 This project is developed without Docker. You need:
 
 - **Node.js 20+** (developed on Node 24)
-- **PostgreSQL 16+** running locally (developed on PostgreSQL 18)
+- **PostgreSQL 18** running locally (developed on PostgreSQL 18.4)
 
 ### 1. Configure environment
 
@@ -94,6 +94,13 @@ migrations on boot), `frontend` (nginx serving the SPA and reverse-proxying
 without any external services. Sensible defaults let it run with no `.env`;
 create a root `.env` (see `.env.example`) to override the database password,
 `JWT_SECRET`, or point `SMTP_HOST` at `relay1.dataart.com`.
+
+> **Upgrading an existing checkout:** the `db` service is pinned to
+> `postgres:18-alpine` (previously 16). Postgres will not start on a data
+> directory created by an older major, so run `docker compose down -v` to
+> discard the old `pgdata` volume before `docker compose up --build`
+> (migrations re-apply on boot). Dump and restore instead if the volume
+> holds data you need.
 
 > **Verified:** `docker compose up --build` was validated end-to-end on Docker
 > Engine 29 (Compose v2, in WSL2 — no Docker Desktop needed): both images build,

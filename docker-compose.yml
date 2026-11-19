@@ -11,9 +11,14 @@
 # ⚠️ NOT verified on the development machine (Docker Desktop is unavailable in
 # this environment). Authored to spec; validate on a Docker-capable host.
 
+# ⚠️ Upgrading from an older Postgres major (the previous pin was 16): a
+# `pgdata` volume initialised by an earlier major will NOT start under 18.
+# For local/dev data, discard it first:  docker compose down -v
+# For data you need to keep, dump on the old major and restore on 18.
+
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ticketing}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ticketing}
